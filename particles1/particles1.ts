@@ -7,8 +7,11 @@ class Vec2 {
         this.y = y
     }
 
+    clone(): Vec2 { return new Vec2(this.x, this.y) }
+
     plus(other: Vec2): Vec2 { return new Vec2(this.x + other.x, this.y + other.y) }
     minus(other: Vec2): Vec2 { return new Vec2(this.x - other.x, this.y - other.y) }
+    scaledBy(scalar: number): Vec2 { return new Vec2(this.x * scalar, this.y * scalar) }
     length2(): number { return this.x * this.x + this.y * this.y }
     length(): number { return Math.sqrt(this.x * this.x + this.y * this.y) }
 
@@ -32,98 +35,34 @@ class Particle {
     }
 }
 
-type ForceAccumulator = (particles: Particle[]) => void
+type Force = (particles: Particle[]) => void
 
 class ParticleSimulation {
     particles: Particle[]
-    forces: ForceAccumulator[]
+    forces: Force[]
 
-    private s: Float32Array
-    private sPrime: Float32Array
-
-    constructor(particles: Particle[], forces: ForceAccumulator[]) {
+    constructor(particles: Particle[], forces: Force[]) {
         this.particles = particles
         this.forces = forces
-
-        // TODO(jlfwong): This doesn't handle the particles length changing
-        this.s = new Float32Array(particles.length * 4)
-        this.sPrime = new Float32Array(particles.length * 4)
-    }
-
-    private clearForces() {
-        for (let particle of this.particles) {
-            particle.f.clear()
-        }
-    }
-
-    private calculateForces() {
-        this.forces.forEach(force => force(this.particles))
-    }
-
-    private calculateDerivatives() {
-        this.clearForces()
-        this.calculateForces()
-    }
-
-    private writeToStateArray() {
-        const s = this.s
-        let index = 0
-        for (let particle of this.particles) {
-            s[index++] = particle.p.x
-            s[index++] = particle.p.y
-            s[index++] = particle.v.x
-            s[index++] = particle.v.y
-        }
-    }
-
-    private readFromStateArray() {
-        const s = this.s
-        let index = 0
-        for (let particle of this.particles) {
-            particle.p.x = s[index++]
-            particle.p.y = s[index++]
-            particle.v.x = s[index++]
-            particle.v.y = s[index++]
-        }
-    }
-
-    private writeToDerivativeArray() {
-        const sPrime = this.sPrime
-        let index = 0
-        for (let particle of this.particles) {
-            sPrime[index++] = particle.v.x
-            sPrime[index++] = particle.v.y
-            sPrime[index++] = particle.f.x / particle.m
-            sPrime[index++] = particle.f.y / particle.m
-        }
-    }
-
-    private eulerStep(deltaT: number) {
-        const s = this.s
-        const sPrime = this.sPrime
-        for (let i = 0, ii = s.length; i < ii; i++) {
-            s[i] += sPrime[i] * deltaT
-        }
     }
 
     step(deltaT: number) {
-        const s = this.s
-        const sPrime = this.sPrime
+        for (let particle of this.particles) {
+            particle.f.clear()
+        }
+        this.forces.forEach(force => force(this.particles))
 
-        const n = this.particles.length
-
-        this.calculateDerivatives()
-        this.writeToStateArray()
-        this.writeToDerivativeArray()
-        this.eulerStep(deltaT)
-        this.readFromStateArray()
+        for (let particle of this.particles) {
+            particle.p.add(particle.v.scaledBy(deltaT))
+            particle.v.add(particle.f.scaledBy(deltaT / particle.m))
+        }
     }
 }
 
 function main() {
     function attraction(particles: Particle[]) {
         let n = particles.length
-        const G = 10.0
+        const G = 100.0
         for (let i = 0; i < n; i++) {
             for (let j = i + 1; j < n; j++) {
                 const pi = particles[i]
@@ -143,11 +82,20 @@ function main() {
         }
     }
 
+    function drag(particles: Particle[]) {
+        const dragCoeff = 0.1 // N/(m/s)
+        for (let particle of particles) {
+            const drag = particle.v.clone()
+            drag.scale(dragCoeff)
+            particle.f.subtract(drag)
+        }
+    }
+
     const particles: Particle[] = []
 
-    const width = 400
-    const height = 400
-    const n = 2000
+    const width = 1000
+    const height = 1000
+    const n = 1000
 
     for (let i = 0; i < n; i++) {
         const p = new Vec2(Math.random() * width, Math.random() * height)
@@ -156,7 +104,7 @@ function main() {
         particles.push(new Particle(p, v, m))
     }
 
-    const simulation = new ParticleSimulation(particles, [attraction])
+    const simulation = new ParticleSimulation(particles, [attraction, drag])
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -166,7 +114,9 @@ function main() {
 
     function draw(particles: Particle[]) {
         ctx.clearRect(0, 0, width, height)
-        ctx.fillStyle = "black";
+        ctx.fillStyle = "black"
+        ctx.fillRect(0, 0, width, height)
+        ctx.fillStyle = "white"
         for (let i = 0, ii = particles.length; i < ii; i++) {
             const particle = particles[i]
             ctx.fillRect(particle.p.x, particle.p.y, 1, 1)

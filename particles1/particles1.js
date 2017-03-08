@@ -3,8 +3,10 @@ var Vec2 = (function () {
         this.x = x;
         this.y = y;
     }
+    Vec2.prototype.clone = function () { return new Vec2(this.x, this.y); };
     Vec2.prototype.plus = function (other) { return new Vec2(this.x + other.x, this.y + other.y); };
     Vec2.prototype.minus = function (other) { return new Vec2(this.x - other.x, this.y - other.y); };
+    Vec2.prototype.scaledBy = function (scalar) { return new Vec2(this.x * scalar, this.y * scalar); };
     Vec2.prototype.length2 = function () { return this.x * this.x + this.y * this.y; };
     Vec2.prototype.length = function () { return Math.sqrt(this.x * this.x + this.y * this.y); };
     Vec2.prototype.add = function (other) { this.x += other.x; this.y += other.y; };
@@ -26,80 +28,26 @@ var ParticleSimulation = (function () {
     function ParticleSimulation(particles, forces) {
         this.particles = particles;
         this.forces = forces;
-        // TODO(jlfwong): This doesn't handle the particles length changing
-        this.s = new Float32Array(particles.length * 4);
-        this.sPrime = new Float32Array(particles.length * 4);
     }
-    ParticleSimulation.prototype.clearForces = function () {
+    ParticleSimulation.prototype.step = function (deltaT) {
+        var _this = this;
         for (var _i = 0, _a = this.particles; _i < _a.length; _i++) {
             var particle = _a[_i];
             particle.f.clear();
         }
-    };
-    ParticleSimulation.prototype.calculateForces = function () {
-        var _this = this;
         this.forces.forEach(function (force) { return force(_this.particles); });
-    };
-    ParticleSimulation.prototype.calculateDerivatives = function () {
-        this.clearForces();
-        this.calculateForces();
-    };
-    ParticleSimulation.prototype.writeToStateArray = function () {
-        var s = this.s;
-        var index = 0;
-        for (var _i = 0, _a = this.particles; _i < _a.length; _i++) {
-            var particle = _a[_i];
-            s[index++] = particle.p.x;
-            s[index++] = particle.p.y;
-            s[index++] = particle.v.x;
-            s[index++] = particle.v.y;
+        for (var _b = 0, _c = this.particles; _b < _c.length; _b++) {
+            var particle = _c[_b];
+            particle.p.add(particle.v.scaledBy(deltaT));
+            particle.v.add(particle.f.scaledBy(deltaT / particle.m));
         }
-    };
-    ParticleSimulation.prototype.readFromStateArray = function () {
-        var s = this.s;
-        var index = 0;
-        for (var _i = 0, _a = this.particles; _i < _a.length; _i++) {
-            var particle = _a[_i];
-            particle.p.x = s[index++];
-            particle.p.y = s[index++];
-            particle.v.x = s[index++];
-            particle.v.y = s[index++];
-        }
-    };
-    ParticleSimulation.prototype.writeToDerivativeArray = function () {
-        var sPrime = this.sPrime;
-        var index = 0;
-        for (var _i = 0, _a = this.particles; _i < _a.length; _i++) {
-            var particle = _a[_i];
-            sPrime[index++] = particle.v.x;
-            sPrime[index++] = particle.v.y;
-            sPrime[index++] = particle.f.x / particle.m;
-            sPrime[index++] = particle.f.y / particle.m;
-        }
-    };
-    ParticleSimulation.prototype.eulerStep = function (deltaT) {
-        var s = this.s;
-        var sPrime = this.sPrime;
-        for (var i = 0, ii = s.length; i < ii; i++) {
-            s[i] += sPrime[i] * deltaT;
-        }
-    };
-    ParticleSimulation.prototype.step = function (deltaT) {
-        var s = this.s;
-        var sPrime = this.sPrime;
-        var n = this.particles.length;
-        this.calculateDerivatives();
-        this.writeToStateArray();
-        this.writeToDerivativeArray();
-        this.eulerStep(deltaT);
-        this.readFromStateArray();
     };
     return ParticleSimulation;
 }());
 function main() {
     function attraction(particles) {
         var n = particles.length;
-        var G = 10.0;
+        var G = 100.0;
         for (var i = 0; i < n; i++) {
             for (var j = i + 1; j < n; j++) {
                 var pi = particles[i];
@@ -114,17 +62,26 @@ function main() {
             }
         }
     }
+    function drag(particles) {
+        var dragCoeff = 0.1; // N/(m/s)
+        for (var _i = 0, particles_1 = particles; _i < particles_1.length; _i++) {
+            var particle = particles_1[_i];
+            var drag_1 = particle.v.clone();
+            drag_1.scale(dragCoeff);
+            particle.f.subtract(drag_1);
+        }
+    }
     var particles = [];
-    var width = 400;
-    var height = 400;
-    var n = 2000;
+    var width = 1000;
+    var height = 1000;
+    var n = 1000;
     for (var i = 0; i < n; i++) {
         var p = new Vec2(Math.random() * width, Math.random() * height);
         var v = new Vec2(0, 0);
         var m = 1.0;
         particles.push(new Particle(p, v, m));
     }
-    var simulation = new ParticleSimulation(particles, [attraction]);
+    var simulation = new ParticleSimulation(particles, [attraction, drag]);
     var canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -133,6 +90,8 @@ function main() {
     function draw(particles) {
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = "white";
         for (var i = 0, ii = particles.length; i < ii; i++) {
             var particle = particles[i];
             ctx.fillRect(particle.p.x, particle.p.y, 1, 1);
