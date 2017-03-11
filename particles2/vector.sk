@@ -1,0 +1,129 @@
+class Vector {
+	var x double
+	var y double
+
+	def new(x double, y double) {
+		self.x = x
+		self.y = y
+	}
+
+	def - Vector {
+		return new(-x, -y)
+	}
+
+	def +(v Vector) Vector {
+		return new(x + v.x, y + v.y)
+	}
+
+	def -(v Vector) Vector {
+		return new(x - v.x, y - v.y)
+	}
+
+	def *(v Vector) Vector {
+		return new(x * v.x, y * v.y)
+	}
+
+	def /(v Vector) Vector {
+		return new(x / v.x, y / v.y)
+	}
+
+	def +(d double) Vector {
+		return new(x + d, y + d)
+	}
+
+	def -(d double) Vector {
+		return new(x - d, y - d)
+	}
+
+	def *(d double) Vector {
+		return new(x * d, y * d)
+	}
+
+	def /(d double) Vector {
+		return new(x / d, y / d)
+	}
+
+	def +=(v Vector) {
+		x += v.x
+		y += v.y
+	}
+
+	def -=(v Vector) {
+		x -= v.x
+		y -= v.y
+	}
+
+	def *=(v Vector) {
+		x *= v.x
+		y *= v.y
+	}
+
+	def /=(v Vector) {
+		x /= v.x
+		y /= v.y
+	}
+
+	def +=(d double) {
+		x += d
+		y += d
+	}
+
+	def -=(d double) {
+		x -= d
+		y -= d
+	}
+
+	def *=(d double) {
+		x *= d
+		y *= d
+	}
+
+	def /=(d double) {
+		x /= d
+		y /= d
+	}
+
+	def equals(v Vector) bool {
+		return x == v.x && y == v.y
+	}
+
+	def length double {
+		return Math.sqrt(x * x + y * y)
+	}
+
+	def dot(v Vector) double {
+		return x * v.x + y * v.y
+	}
+
+	def set(x double, y double) Vector {
+		self.x = x
+		self.y = y
+		return self
+	}
+
+	def set(v Vector) Vector {
+		x = v.x
+		y = v.y
+		return self
+	}
+
+	def clear {
+		x = 0
+		y = 0
+	}
+
+	def clone Vector {
+		return new(x, y)
+	}
+
+	def toString string {
+		return "Vector(\(x), \(y))"
+	}
+}
+
+namespace Vector {
+	@neverinline
+	def new Vector {
+		return new(0, 0)
+	}
+}

@@ -1,0 +1,144 @@
+type Entity : int {}
+
+class Component<T> {
+    var id Entity
+    var value T
+}
+
+interface BaseSystem {
+    def remove(entity Entity)
+}
+
+class System<T> :: BaseSystem {
+    var _components List<Component<T>> = []
+
+    # Map of EntityID -> index in _components
+    var _indexOf IntMap<int> = {}
+
+    # List of indices in _components that are unused
+    var _freeList List<int> = []
+
+    def add(entity Entity, value T) {
+        var component = Component<T>.new(entity, value)
+        if _freeList.isEmpty {
+            _indexOf[entity as int] = _components.count
+            _components.append(component)
+        } else {
+            var index = _freeList.takeLast
+            _indexOf[entity as int] = index
+            _components[index] = component
+        }
+    }
+
+    def remove(entity Entity) {
+        if !(entity as int in _indexOf) {
+            return
+        }
+        var index = _indexOf[entity as int]
+        _indexOf.remove(index)
+        _freeList.append(index)
+        _components[index] = null
+    }
+}
+
+class ECS {
+    var _systems List<BaseSystem>
+    var _count = 0
+
+    def createEntity Entity {
+        return _count++ as Entity
+    }
+
+    def destroyEntity(entity Entity) {
+        for system in _systems {
+            system.remove(entity)
+        }
+    }
+}
+
+######################################################################
+
+class PointMass {
+    var p Vector
+    var v Vector
+    var m double
+    var f Vector
+}
+
+interface PointMassForce {
+    def apply(particles List<PointMass>)
+}
+
+class ParticleForceSystem : System<PointMass> {
+    def step(forces List<ParticleForce>, deltaT double) {
+        for component in _components {
+            if component == null {
+                continue
+            }
+        }
+    }
+}
+
+def step(particles List<PointMass>, forces List<PointMassForce>, deltaT double) {
+    for particle in particles {
+        particle.f.clear
+    }
+    for force in forces {
+        force.apply(particles)
+    }
+    for particle in particles {
+        particle.p += particle.v * deltaT
+        particle.v += particle.f * deltaT / particle.m
+    }
+}
+
+######################################################################
+
+interface RenderingPasses {
+    def render(ctx CanvasRenderingContext2D)
+}
+
+class Renderer {
+    var _ctx CanvasRenderingContext2D
+    var _passes List<RenderingPasses> = []
+
+    def render {
+        for pass in _passes {
+            pass.render(_ctx)
+        }
+    }
+}
+
+######################################################################
+
+
+
+######################################################################
+
+class Gravity :: Force {
+    def apply(particles List<Particle>) {
+        for particle in particles {
+            particle.f += Vector.new(0, -1)
+        }
+    }
+}
+
+######################################################################
+
+def start {
+    const width = 1000
+    const height = 1000
+
+    var canvas = document.createElementCanvas
+    canvas.width = width
+    canvas.height = height
+    var ctx = canvas.getContext2D
+
+    var renderer = Renderer.new(ctx)
+
+}
+
+@entry
+def main {
+    document.addEventListener("DOMContentLoaded", () => start)
+}
