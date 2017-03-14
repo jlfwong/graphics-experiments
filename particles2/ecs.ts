@@ -2,46 +2,47 @@ function assert(condition: boolean): void {
     if (!condition) throw new Error("Unexpected error.")
 }
 
-interface Allocator<T> {
+interface ComponentAllocator<T> {
     allocate(entityID: number): T
-    release(entityID: number): void
+    release(entityID: number, t: T): void
 }
 
-class DumbAllocator<T> implements Allocator<T> {
+class DefaultComponentAllocator<T> implements ComponentAllocator<T> {
     constructor(readonly ctor: {new(): T}) {}
     allocate(entityID: number) {
         return new this.ctor
     }
-    release(entityID: number) {
+    release(entityID: number, t: T) {
         // No-op - just let the object be garbage collected eventually
     }
 }
 
+
 type AllocatorFactory<T> = {
-    new(ctor: {new(): T}): Allocator<T>
+    new(ctor: {new(): T}): ComponentAllocator<T>
 }
 
 class ComponentType<T> {
     readonly componentName: string
-    readonly allocator: Allocator<T>
+    readonly allocator: ComponentAllocator<T>
 
-    constructor(componentName: string, ctor: {new(): T}, allocatorCtor: AllocatorFactory<T> = DumbAllocator) {
+    constructor(componentName: string, ctor: {new(): T}, allocatorCtor: AllocatorFactory<T> = DefaultComponentAllocator) {
         this.componentName = componentName
         this.allocator = new allocatorCtor(ctor)
-        ComponentType.nameToReleaseFn[componentName] = (entityID: number) => { this.release(entityID) }
+        ComponentType.nameToReleaseFn[componentName] = (entityID: number, t: T) => { this.release(entityID, t) }
     }
 
     allocate(entityID: number): T { return this.allocator.allocate(entityID) }
-    release(entityID: number): void { this.allocator.release(entityID) }
+    release(entityID: number, t: T): void { this.allocator.release(entityID, t) }
 
-    static nameToReleaseFn: {[name: string] : ((entityID: number) => void )} = Object.create(null)
-    static release(componentName: string, entityID: number) {
-        ComponentType.nameToReleaseFn[componentName](entityID)
+    static nameToReleaseFn: {[name: string] : ((entityID: number, t: any) => void )} = Object.create(null)
+    static release(componentName: string, entityID: number, t: any) {
+        ComponentType.nameToReleaseFn[componentName](entityID, t)
     }
 }
 
 class Entity {
-    id: number = null
+    id: number = -1
     public components: {[componentName: string]: {}} = Object.create(null)
 
     add<T>(componentType: ComponentType<T>): T {
@@ -54,7 +55,7 @@ class Entity {
         return componentType.componentName in this.components
     }
 
-    hasAll2<T, U>(t: ComponentType<T>, u: ComponentType<U>): boolean {
+    hasBoth<T, U>(t: ComponentType<T>, u: ComponentType<U>): boolean {
         return this.has(t) && this.has(u)
     }
 
@@ -74,14 +75,14 @@ class Entity {
         const component = this.components[componentName] as T
         assert(component != null)
         delete this.components[componentName]
-        componentType.release(this.id)
+        componentType.release(this.id, component)
     }
 
     removeAll() {
         for (const componentName in this.components) {
             const component = this.components[componentName]
             delete this.components[componentName];
-            ComponentType.release(componentName, this.id)
+            ComponentType.release(componentName, this.id, component)
         }
     }
 }
@@ -100,7 +101,7 @@ class ECS {
     }
 
     createEntity(): Entity {
-        const entity = this.freeList.length > 0 ? this.freeList.pop() : new Entity()
+        const entity = this.freeList.pop() || new Entity()
         entity.id = this.maxID++
         this.entityIDToIndex[entity.id] = this.entities.length
         this.entities.push(entity)
@@ -121,7 +122,7 @@ class ECS {
 
 //////////////////////////
 
-class PoolAllocator<T> implements Allocator<T> {
+class PoolComponentAllocator<T> implements ComponentAllocator<T> {
     activeList: T[] = []
     entityIDToActiveListIndex: {[key: number]: number} = Object.create(null)
     freeList: T[] = []
@@ -130,23 +131,20 @@ class PoolAllocator<T> implements Allocator<T> {
 
     allocate(entityID: number): T {
         assert(!(entityID in this.entityIDToActiveListIndex));
-        if (this.freeList.length > 0) {
-            return this.freeList.pop()
-        } else {
-            return new this.ctor()
-        }
+        return this.freeList.pop() || new this.ctor()
     }
 
-    release(entityID: number): void {
+    release(entityID: number, t: T): void {
         const index = this.entityIDToActiveListIndex[entityID]
         assert(index != null);
-        const t = this.activeList[index]
+        const component = this.activeList[index]
+        assert(component === t)
         if (index !== this.activeList.length - 1) {
             // Move the last element into the position of the released element
             this.activeList[index] = this.activeList[this.activeList.length - 1]
         }
         this.activeList.pop()
-        this.freeList.push(t)
+        this.freeList.push(component)
     }
 }
 
@@ -174,7 +172,7 @@ function main() {
     entity.get(Vel)
 
     for (let entity of ecs.entities) {
-        if (!entity.hasAll2(Pos, Vel)) {
+        if (!entity.hasBoth(Pos, Vel)) {
             continue;
         }
         const pos = entity.get(Pos)

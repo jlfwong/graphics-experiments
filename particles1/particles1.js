@@ -24,30 +24,22 @@ var Particle = (function () {
     }
     return Particle;
 }());
-var ParticleSimulation = (function () {
-    function ParticleSimulation(particles, forces) {
-        this.particles = particles;
-        this.forces = forces;
+function step(particles, forces, deltaT) {
+    for (var _i = 0, particles_1 = particles; _i < particles_1.length; _i++) {
+        var particle = particles_1[_i];
+        particle.f.clear();
     }
-    ParticleSimulation.prototype.step = function (deltaT) {
-        var _this = this;
-        for (var _i = 0, _a = this.particles; _i < _a.length; _i++) {
-            var particle = _a[_i];
-            particle.f.clear();
-        }
-        this.forces.forEach(function (force) { return force(_this.particles); });
-        for (var _b = 0, _c = this.particles; _b < _c.length; _b++) {
-            var particle = _c[_b];
-            particle.p.add(particle.v.scaledBy(deltaT));
-            particle.v.add(particle.f.scaledBy(deltaT / particle.m));
-        }
-    };
-    return ParticleSimulation;
-}());
+    forces.forEach(function (force) { return force(particles); });
+    for (var _a = 0, particles_2 = particles; _a < particles_2.length; _a++) {
+        var particle = particles_2[_a];
+        particle.p.add(particle.v.scaledBy(deltaT));
+        particle.v.add(particle.f.scaledBy(deltaT / particle.m));
+    }
+}
 function main() {
     function attraction(particles) {
         var n = particles.length;
-        var G = 100.0;
+        var G = 10.0;
         for (var i = 0; i < n; i++) {
             for (var j = i + 1; j < n; j++) {
                 var pi = particles[i];
@@ -64,24 +56,27 @@ function main() {
     }
     function drag(particles) {
         var dragCoeff = 0.1; // N/(m/s)
-        for (var _i = 0, particles_1 = particles; _i < particles_1.length; _i++) {
-            var particle = particles_1[_i];
+        for (var _i = 0, particles_3 = particles; _i < particles_3.length; _i++) {
+            var particle = particles_3[_i];
             var drag_1 = particle.v.clone();
             drag_1.scale(dragCoeff);
             particle.f.subtract(drag_1);
         }
     }
-    var particles = [];
     var width = 1000;
     var height = 1000;
     var n = 1000;
-    for (var i = 0; i < n; i++) {
-        var p = new Vec2(Math.random() * width, Math.random() * height);
-        var v = new Vec2(0, 0);
-        var m = 1.0;
-        particles.push(new Particle(p, v, m));
+    function initParticles() {
+        var particles = [];
+        for (var i = 0; i < n; i++) {
+            var p = new Vec2(Math.random() * width, Math.random() * height);
+            var v = new Vec2(0, 0);
+            var m = 1.0;
+            particles.push(new Particle(p, v, m));
+        }
+        return particles;
     }
-    var simulation = new ParticleSimulation(particles, [attraction, drag]);
+    var particles = initParticles();
     var canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -97,9 +92,10 @@ function main() {
             ctx.fillRect(particle.p.x, particle.p.y, 1, 1);
         }
     }
+    var forces = [attraction, drag];
     function tick() {
         var deltaT = 1 / 60.0;
-        simulation.step(deltaT);
+        step(particles, forces, deltaT);
         draw(particles);
         requestAnimationFrame(tick);
     }

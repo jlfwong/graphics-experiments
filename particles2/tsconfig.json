@@ -1,0 +1,9 @@
+{
+    "compileOnSave": true,
+    "compilerOptions": {
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "outFile": "particles2.js"
+    },
+    "include": ["*.ts"]
+}

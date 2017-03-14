@@ -37,32 +37,22 @@ class Particle {
 
 type Force = (particles: Particle[]) => void
 
-class ParticleSimulation {
-    particles: Particle[]
-    forces: Force[]
-
-    constructor(particles: Particle[], forces: Force[]) {
-        this.particles = particles
-        this.forces = forces
+function step(particles: Particle[], forces: Force[], deltaT: number) {
+    for (let particle of particles) {
+        particle.f.clear()
     }
+    forces.forEach(force => force(particles))
 
-    step(deltaT: number) {
-        for (let particle of this.particles) {
-            particle.f.clear()
-        }
-        this.forces.forEach(force => force(this.particles))
-
-        for (let particle of this.particles) {
-            particle.p.add(particle.v.scaledBy(deltaT))
-            particle.v.add(particle.f.scaledBy(deltaT / particle.m))
-        }
+    for (let particle of particles) {
+        particle.p.add(particle.v.scaledBy(deltaT))
+        particle.v.add(particle.f.scaledBy(deltaT / particle.m))
     }
 }
 
 function main() {
     function attraction(particles: Particle[]) {
         let n = particles.length
-        const G = 100.0
+        const G = 10.0
         for (let i = 0; i < n; i++) {
             for (let j = i + 1; j < n; j++) {
                 const pi = particles[i]
@@ -91,20 +81,22 @@ function main() {
         }
     }
 
-    const particles: Particle[] = []
-
     const width = 1000
     const height = 1000
     const n = 1000
 
-    for (let i = 0; i < n; i++) {
-        const p = new Vec2(Math.random() * width, Math.random() * height)
-        const v = new Vec2(0, 0)
-        const m = 1.0
-        particles.push(new Particle(p, v, m))
+    function initParticles(): Particle[] {
+        const particles: Particle[] = []
+        for (let i = 0; i < n; i++) {
+            const p = new Vec2(Math.random() * width, Math.random() * height)
+            const v = new Vec2(0, 0)
+            const m = 1.0
+            particles.push(new Particle(p, v, m))
+        }
+        return particles
     }
 
-    const simulation = new ParticleSimulation(particles, [attraction, drag])
+    const particles = initParticles()
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -123,9 +115,11 @@ function main() {
         }
     }
 
+    const forces = [attraction, drag]
+
     function tick() {
         const deltaT = 1/60.0
-        simulation.step(deltaT)
+        step(particles, forces, deltaT)
         draw(particles)
         requestAnimationFrame(tick)
     }
