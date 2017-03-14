@@ -2,38 +2,45 @@ function assert(condition: boolean): void {
     if (!condition) throw new Error("Unexpected error.")
 }
 
-interface ComponentAllocator<T> {
-    allocate(entityID: number): T
-    release(entityID: number, t: T): void
+interface Allocator<T> {
+    allocate(): T
+    release(t: T): void
 }
 
-class DefaultComponentAllocator<T> implements ComponentAllocator<T> {
+class DefaultAllocator<T> implements Allocator<T> {
     constructor(readonly ctor: {new(): T}) {}
-    allocate(entityID: number) {
+    allocate() {
         return new this.ctor
     }
-    release(entityID: number, t: T) {
+    release(t: T) {
         // No-op - just let the object be garbage collected eventually
     }
 }
 
+class PoolAllocator<T> implements Allocator<T> {
+    private freeList: T[] = []
+    constructor(readonly ctor: {new(): T}) {}
+
+    allocate(): T {
+        return this.freeList.pop() || new this.ctor()
+    }
+
+    release(t: T): void {
+        this.freeList.push(t)
+    }
+}
 
 type AllocatorFactory<T> = {
-    new(ctor: {new(): T}): ComponentAllocator<T>
+    new(ctor: {new(): T}): Allocator<T>
 }
 
 class ComponentType<T> {
-    readonly componentName: string
-    readonly allocator: ComponentAllocator<T>
-
-    constructor(componentName: string, ctor: {new(): T}, allocatorCtor: AllocatorFactory<T> = DefaultComponentAllocator) {
-        this.componentName = componentName
-        this.allocator = new allocatorCtor(ctor)
+    constructor(readonly componentName: string, readonly allocator: Allocator<T>) {
         ComponentType.nameToReleaseFn[componentName] = (entityID: number, t: T) => { this.release(entityID, t) }
     }
 
-    allocate(entityID: number): T { return this.allocator.allocate(entityID) }
-    release(entityID: number, t: T): void { this.allocator.release(entityID, t) }
+    allocate(entityID: number): T { return this.allocator.allocate() }
+    release(entityID: number, t: T): void { this.allocator.release(t) }
 
     static nameToReleaseFn: {[name: string] : ((entityID: number, t: any) => void )} = Object.create(null)
     static release(componentName: string, entityID: number, t: any) {
@@ -118,66 +125,33 @@ class ECS {
         this.entities.pop()
         this.freeList.push(entity)
     }
-}
 
-//////////////////////////
-
-class PoolComponentAllocator<T> implements ComponentAllocator<T> {
-    activeList: T[] = []
-    entityIDToActiveListIndex: {[key: number]: number} = Object.create(null)
-    freeList: T[] = []
-
-    constructor(readonly ctor: {new(): T}) {}
-
-    allocate(entityID: number): T {
-        assert(!(entityID in this.entityIDToActiveListIndex));
-        return this.freeList.pop() || new this.ctor()
+    eachWith<T>(ct: ComponentType<T>, cb: (t: T, e: Entity) => void) {
+        for (let entity of this.entities) {
+            if (ct.componentName in entity.components) {
+                cb(entity.get(ct), entity)
+            }
+        }
     }
 
-    release(entityID: number, t: T): void {
-        const index = this.entityIDToActiveListIndex[entityID]
-        assert(index != null);
-        const component = this.activeList[index]
-        assert(component === t)
-        if (index !== this.activeList.length - 1) {
-            // Move the last element into the position of the released element
-            this.activeList[index] = this.activeList[this.activeList.length - 1]
+    eachWith2<T, U>(ct1: ComponentType<T>, ct2: ComponentType<U>, cb: (t: T, u: U, e: Entity) => void) {
+        for (let entity of this.entities) {
+            if (ct1.componentName in entity.components &&
+                ct2.componentName in entity.components
+            ) {
+                cb(entity.get(ct1), entity.get(ct2), entity)
+            }
         }
-        this.activeList.pop()
-        this.freeList.push(component)
     }
-}
 
-//////////////////////////
-
-class Vector {
-    x: number
-    y: number
-}
-
-class Color {
-    r: number
-    g: number
-    b: number
-}
-
-const Pos = new ComponentType<Vector>("Position", Vector)
-const Vel = new ComponentType<Vector>("Velocity", Vector)
-const Col = new ComponentType<Color>("Color", Color)
-
-function main() {
-    const ecs = new ECS()
-    const entity = ecs.createEntity()
-    entity.add(Pos)
-    entity.get(Vel)
-
-    for (let entity of ecs.entities) {
-        if (!entity.hasBoth(Pos, Vel)) {
-            continue;
+    eachWith3<T, U, V>(ct1: ComponentType<T>, ct2: ComponentType<U>, ct3: ComponentType<V>, cb: (t: T, u: U, v: V, e: Entity) => void) {
+        for (let entity of this.entities) {
+            if (ct1.componentName in entity.components &&
+                ct2.componentName in entity.components &&
+                ct3.componentName in entity.components
+            ) {
+                cb(entity.get(ct1), entity.get(ct2), entity.get(ct3), entity)
+            }
         }
-        const pos = entity.get(Pos)
-        const vel = entity.get(Vel)
-        pos.x += vel.x
-        pos.y += vel.y
     }
 }
