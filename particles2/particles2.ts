@@ -58,7 +58,7 @@ namespace Simulation {
         const df = new Vec2
         return function applyGravity() {
             group.each((body, entity) => {
-                df.set(0, -9.8)
+                df.set(0, -98)
                 df.scale(body.mass)
                 body.force.add(df)
                 // df = -9.8 * m [down]
@@ -66,23 +66,12 @@ namespace Simulation {
         }
     }
 
-    /**
-     * Destroy old entities
-     */
-    class AgeInfo {
-        lifespan: number = 0.0
-        age: number = 0.0
-        set(lifespan: number, age: number) { this.lifespan = lifespan; this.age = age }
-    }
-    const Temporary = new ComponentType("Temporary", new PoolAllocator(AgeInfo))
-
     function recycleParticlesSystem(context: Context, width: number, height: number) {
         const toRecycle: Entity[] = []
-        const group = context.createGroupWith(Temporary)
+        const group = context.createGroupWith(Position, ParticleAppearance)
         return function recycleParticlesSystem(dt: number) {
-            group.each((temporary, entity) => {
-                temporary.age += dt
-                if (temporary.age > temporary.lifespan) {
+            group.each((position, _, entity) => {
+                if (position.x < 0 || position.x >= width || position.y < -height || position.y > 0) {
                     resetParticle(entity, width, height)
                 }
             })
@@ -110,11 +99,10 @@ namespace Simulation {
     }
 
     function resetParticle(entity: Entity, width: number, height: number): void {
-        entity.get(Temporary).set(Math.random() * 3.0, 0.0)
-        entity.get(Position).set(Math.random() * width, 10)
+        entity.get(Position).set(Math.random() * width, 0)
         entity.get(Velocity).set(0, -100)
         entity.get(RigidBody).clear()
-        entity.get(ParticleAppearance).set(1, "black")
+        entity.get(ParticleAppearance).set(1, "white")
     }
 
     /**
@@ -122,11 +110,11 @@ namespace Simulation {
      */
     function createParticle(context: Context, width: number, height: number): void {
         const entity = context.createEntity()
-        entity.add(Temporary).set(Math.random() * 3.0, 0.0)
-        entity.add(Position).set(Math.random() * width, 10)
-        entity.add(Velocity).set(0, -100)
-        entity.add(RigidBody).clear()
-        entity.add(ParticleAppearance).set(1, "black")
+        entity.add(Position)
+        entity.add(Velocity)
+        entity.add(RigidBody)
+        entity.add(ParticleAppearance)
+        resetParticle(entity, width, height)
     }
 
     function startTick(cb: () => void) {
@@ -156,10 +144,12 @@ namespace Simulation {
         const move = moveSystem(simContext)
         const renderParticles = particleRenderSystem(simContext, ctx)
 
-        for (let i = 0; i < 20000; i++) {
-            createParticle(simContext, width, height)
-        }
         function tick() {
+            if (simContext.entities.length < 2000) {
+                for (let i = 0; i < 10; i++) {
+                    createParticle(simContext, width, height)
+                }
+            }
             const dt = 1/60.0
 
             recycleParticles(dt)
@@ -167,7 +157,8 @@ namespace Simulation {
             accelerate(dt)
             move(dt)
 
-            ctx.clearRect(0, 0, width, height)
+            ctx.fillStyle = 'black'
+            ctx.fillRect(0, 0, width, height)
             renderParticles()
         }
         startTick(tick)
