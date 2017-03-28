@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Particles 2</title>
+<script src="./particles2.js"></script>
+<script src="http://rawgit.com/mrdoob/stats.js/master/build/stats.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var stats=new Stats();
+    document.body.appendChild(stats.dom);
+    requestAnimationFrame(function loop() {
+        stats.update();
+        requestAnimationFrame(loop);
+    });
+
+    Simulation.main()
+});
+</script>
+</head>
+<body>
+</body>
+</html>

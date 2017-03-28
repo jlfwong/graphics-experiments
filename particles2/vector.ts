@@ -25,7 +25,7 @@ class Vec2 {
     clear() { this.x = 0; this.y = 0}
 
     // Memory pooling
-    freeList: Vec2[] = []
+    static freeList: Vec2[] = []
     static allocateFromPool(): Vec2 { return Vec2.freeList.pop() || new Vec2() }
     returnToPool() { Vec2.freeList.push(this) }
 }
