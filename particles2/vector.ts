@@ -12,6 +12,7 @@ class Vec2 {
     // Non-mutating operations
     plus(other: Vec2): Vec2 { return new Vec2(this.x + other.x, this.y + other.y) }
     minus(other: Vec2): Vec2 { return new Vec2(this.x - other.x, this.y - other.y) }
+    dot(other: Vec2): number { return this.x * other.x + this.y * other.y }
     scaledBy(scalar: number): Vec2 { return new Vec2(this.x * scalar, this.y * scalar) }
     length2(): number { return this.x * this.x + this.y * this.y }
     length(): number { return Math.sqrt(this.x * this.x + this.y * this.y) }
