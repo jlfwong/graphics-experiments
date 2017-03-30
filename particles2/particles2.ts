@@ -88,10 +88,29 @@ namespace Simulation {
     /**
      * Render particles
      */
+    const TRAIL_SIZE = 3
     class ParticleAppearanceInfo {
         radius: number
         color: string
+        trail: Vec2[] // Circular buffer of size TRAIL_SIZE
+        trailIndex: number
+        constructor() {
+            this.trail = []
+            for (let i = 0; i < TRAIL_SIZE; i++) {
+                this.trail.push(Vec2.allocateFromPool())
+            }
+        }
         set(radius: number, color: string) { this.radius = radius; this.color = color }
+        resetTrail(position: Vec2) {
+            this.trailIndex = 0
+            for (let i = 0; i < TRAIL_SIZE; i++) {
+                this.trail[i].copyFrom(position)
+            }
+        }
+        addToTrail(position: Vec2) {
+            this.trail[this.trailIndex++].copyFrom(position)
+            this.trailIndex %= TRAIL_SIZE
+        }
     }
     const ParticleAppearance = new ComponentType("ParticleAppearance", new PoolAllocator(ParticleAppearanceInfo))
 
@@ -100,8 +119,17 @@ namespace Simulation {
         const group = context.createGroupWith(Position, ParticleAppearance)
         return function renderParticles() {
             group.each((p, appearance) => {
-                ctx.fillStyle = appearance.color
-                ctx.fillRect(p.x * PIXELS_PER_METER, height - p.y * PIXELS_PER_METER, appearance.radius, appearance.radius)
+                appearance.addToTrail(p)
+                ctx.strokeStyle = appearance.color
+                ctx.beginPath()
+                ctx.moveTo(p.x * PIXELS_PER_METER, height - p.y * PIXELS_PER_METER)
+                for (let i = 0; i < TRAIL_SIZE; i++) {
+                    const index = (i + appearance.trailIndex) % TRAIL_SIZE
+                    const trailPos = appearance.trail[index]
+                    ctx.lineTo(trailPos.x * PIXELS_PER_METER, height - trailPos.y * PIXELS_PER_METER)
+                }
+                ctx.stroke()
+                // ctx.fillRect(p.x * PIXELS_PER_METER, height - p.y * PIXELS_PER_METER, appearance.radius, appearance.radius)
             })
         }
     }
@@ -112,7 +140,9 @@ namespace Simulation {
         const rigidBody = entity.get(RigidBody)
         rigidBody.clear()
         rigidBody.mass = 0.004 // kg
-        entity.get(ParticleAppearance).set(2, "rgb(100, 100, 200)")
+        const appearance = entity.get(ParticleAppearance)
+        appearance.resetTrail(entity.get(Position))
+        appearance.set(1, "rgba(0, 0, 0, 0.1)")
     }
 
     /**
@@ -120,8 +150,8 @@ namespace Simulation {
      */
     function particleBounceSystem(context: Context) {
         const group = context.createGroupWith(Position, Velocity, ParticleAppearance)
-        const umbrellaCenter = new Vec2(3, 1)
-        const radius = 1
+        const umbrellaCenter = new Vec2(3, 1.5)
+        const radius = 0.75
         const r2 = radius * radius
         const v1 = new Vec2()
         const n = new Vec2()
@@ -217,7 +247,7 @@ namespace Simulation {
             move(dt)
             bounceParticles(dt)
 
-            ctx.fillStyle = 'black'
+            ctx.fillStyle = 'white'
             ctx.fillRect(0, 0, width, height)
 
             // Draw the umbrella
