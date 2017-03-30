@@ -58,15 +58,18 @@ namespace Simulation {
     const GRAVITY = 9.8 // m/s^2
     const TERMINAL_VELOCITY = 10.0 // m/s
     const TERMINAL_VELOCITY2 = TERMINAL_VELOCITY * TERMINAL_VELOCITY
-
     function dragSystem(context: Context) {
         const group = context.createGroupWith(Velocity, RigidBody)
         const df = new Vec2
+        const vDiff = new Vec2
         const dragFactor = (RAINDROP_MASS * GRAVITY) / TERMINAL_VELOCITY2
-        return function applyDrag() {
+        return function applyDrag(vWind: Vec2) {
             group.each((v, body, entity) => {
-                df.copyFrom(v)
-                df.scale(-dragFactor * v.length())
+                vDiff.copyFrom(v)
+                vDiff.subtract(vWind)
+
+                df.copyFrom(vDiff)
+                df.scale(-dragFactor * vDiff.length())
                 body.force.add(df)
                 // df = -dragFactor * v
             })
@@ -78,7 +81,7 @@ namespace Simulation {
         const group = context.createGroupWith(Position, ParticleAppearance)
         return function recycleParticlesSystem(dt: number) {
             group.each((position, _, entity) => {
-                if (position.x < 0 || position.x >= width || position.y < 0) {
+                if (position.y < 0) {
                     resetParticle(entity)
                 }
             })
@@ -88,7 +91,7 @@ namespace Simulation {
     /**
      * Render particles
      */
-    const TRAIL_SIZE = 3
+    const TRAIL_SIZE = 6
     class ParticleAppearanceInfo {
         radius: number
         color: string
@@ -135,7 +138,7 @@ namespace Simulation {
     }
 
     function resetParticle(entity: Entity): void {
-        entity.get(Position).set(Math.random() * 6, 6)
+        entity.get(Position).set(3 + 12 * (Math.random() * 2 - 1), 6)
         entity.get(Velocity).set(0, -5 - Math.random() * 5) // Random speed between 5m/s and 10m/s down
         const rigidBody = entity.get(RigidBody)
         rigidBody.clear()
@@ -214,10 +217,13 @@ namespace Simulation {
         })()
     }
 
-    export function main() {
-        const canvas = document.createElement("canvas")
+    export function main(canvas?: HTMLCanvasElement) {
+        if (!canvas) {
+            canvas = document.createElement("canvas")
+            document.body.appendChild(canvas)
+        }
+        
         const ctx = canvas.getContext("2d")!
-        document.body.appendChild(canvas)
         const width = 600
         const height = 600
         canvas.width = width
@@ -233,30 +239,32 @@ namespace Simulation {
         const move = moveSystem(simContext)
         const bounceParticles = particleBounceSystem(simContext)
         const renderParticles = particleRenderSystem(simContext, ctx, width, height)
+        
+        const windSpeed = new Vec2(0, 0)
+
+        const MAX_WIND_SPEED = 40.0 // m/s
+        canvas.addEventListener("mousemove", (ev) => {
+            const xDirection = ev.clientX / width - 0.5
+            windSpeed.set(MAX_WIND_SPEED * xDirection, 0)
+        })
 
         function tick() {
             if (simContext.entities.length < 2000) {
-                createParticle(simContext, width, height)
+                for (let i = 0; i < 5; i++) {
+                    createParticle(simContext, width, height)
+                }
             }
             const dt = 1/60.0
 
             recycleParticles(dt)
             applyGravity()
-            applyDrag()
+            applyDrag(windSpeed)
             accelerate(dt)
             move(dt)
             bounceParticles(dt)
 
             ctx.fillStyle = 'white'
             ctx.fillRect(0, 0, width, height)
-
-            // Draw the umbrella
-            /*
-            ctx.fillStyle = 'rgb(30, 30, 30)'
-            ctx.beginPath()
-            ctx.ellipse(400, 600, 100, 100, 0, 0, 2 * Math.PI)
-            ctx.fill()
-            */
 
             renderParticles()
 
